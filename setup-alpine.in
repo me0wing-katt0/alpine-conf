@@ -1,55 +1,58 @@
 #!/bin/sh
 
-PROGRAM=setup-alpine
-VERSION=@VERSION@
+PROGRAM = setup-alpine
+VERSION = @VERSION@
 
-PREFIX=
+PREFIX =
 . $PREFIX/lib/libalpine.sh
 
 is_qemu() {
-	grep -q "QEMU" /proc/cpuinfo \
-		|| strings /sys/firmware/dmi/tables/DMI 2>/dev/null | grep -q QEMU
+    grep -q "QEMU" /proc/cpuinfo \ || strings /sys/firmware/dmi/tables/DMI 2>/dev/null | grep -q QEMU
 }
 
 shift $(expr $OPTIND - 1)
 
-rc_sys=$(openrc --sys)
+rc_sys = $(openrc --sys)
 
 # mount xenfs so we can detect xen dom0
-if [ "$rc_sys" = "XENU" ] && ! grep -q '^xenfs' /proc/mounts; then
-	modprobe xenfs
-	mount -t xenfs xenfs /proc/xen
+if ["$rc_sys" = "XENU"] && ! grep -q '^xenfs' /proc/mounts; then
+modprobe xenfs
+mount -t xenfs xenfs /proc/xen
 fi
 
-PKGADD="apk add"
+PKGADD = "apk add"
 
-if [ "$rc_sys" != LXC ]; then
-	$PREFIX/sbin/setup-keymap
-	$PREFIX/sbin/setup-hostname
+if ["$rc_sys" != LXC]; then
+$PREFIX/sbin/setup-keymap
+$PREFIX/sbin/setup-hostname
 fi
 
 
 $PREFIX/sbin/setup-interfaces -a -r
 
 # setup up dns if no dhcp was configured
-grep '^iface.*dhcp' $ROOT/etc/network/interfaces > /dev/null ||\
-	$PREFIX/sbin/setup-dns ${DNSOPTS}
+grep '^iface.*dhcp' $ROOT/etc/network/interfaces > /dev/null || \
+$PREFIX/sbin/setup-dns $ {
+    DNSOPTS
+}
 
 # set root password
-if [ -z "$NOCOMMIT" ] && [ -z "$empty_root_password" ]; then
-	while ! passwd ; do
-		echo "Please retry."
-	done
+if [-z "$NOCOMMIT"] && [-z "$empty_root_password"]; then
+while ! passwd; do
+echo "Please retry."
+done
 fi
 
-$PREFIX/sbin/setup-timezone ${TIMEZONEOPTS}
+$PREFIX/sbin/setup-timezone $ {
+    TIMEZONEOPTS
+}
 
 rc-update --quiet add networking boot
 rc-update --quiet add urandom boot
 for svc in acpid cron crond; do
-	if rc-service --exists $svc; then
-		rc-update --quiet add $svc
-	fi
+if rc-service --exists $svc; then
+rc-update --quiet add $svc
+fi
 done
 
 # enable new hostname
@@ -59,23 +62,25 @@ rc-service hostname --quiet restart
 openrc boot
 openrc default
 
-_dn=$(sed -n \
--e '/^domain[[:space:]][[:space:]]*/{s///;s/\([^[:space:]]*\).*$/\1/;h;}' \
--e '/^search[[:space:]][[:space:]]*/{s///;s/\([^[:space:]]*\).*$/\1/;h;}' \
--e '${g;p;}' /etc/resolv.conf 2>/dev/null)
+_dn = $(sed -n \
+    -e '/^domain[[:space:]][[:space:]]*/{s///;s/\([^[:space:]]*\).*$/\1/;h;}' \
+    -e '/^search[[:space:]][[:space:]]*/{s///;s/\([^[:space:]]*\).*$/\1/;h;}' \
+    -e '${g;p;}' /etc/resolv.conf 2>/dev/null)
 
-_hn=$(hostname)
-_hn=${_hn%%.*}
+_hn = $(hostname)
+_hn = $ {
+    _hn%%.*
+}
 
 wget https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn-social/hosts -O /etc/hosts
 
 # activate the proxy if configured
-if [ -r "$ROOT/etc/profile" ]; then
-	. "$ROOT/etc/profile"
+if [-r "$ROOT/etc/profile"]; then 
+  . "$ROOT/etc/profile"
 fi
 
-if ! is_qemu && [ "$rc_sys" != "LXC" ]; then
-	$PREFIX/sbin/setup-ntp -c busybox
+if ! is_qemu && ["$rc_sys" != "LXC"]; then
+  $PREFIX/sbin/setup-ntp -c busybox
 fi
 
 $PREFIX/sbin/setup-apkrepos -c -1
@@ -83,12 +88,29 @@ $PREFIX/sbin/setup-apkrepos -c -1
 $PREFIX/sbin/setup-sshd
 
 if is_xen_dom0; then
-	setup-xen-dom0
+  setup-xen-dom0
 fi
 
-if [ "$rc_sys" = "LXC" ]; then
-	exit 0
+#the part where the real fun begins
+apk update
+apk upgrade
+apk add mesa-dri-nouveau mesa-dri-gallium mesa-dri-intel mesa-dri-classic mesa-dri-ati intel-ucode amd-ucode eudev
+setup-eudev
+ask "default user username?" "user"
+passwd $resp
+adduser $resp
+adduser $resp input
+adduser $resp video
+adduser $resp plugdev
+adduser $resp wheel
+adduser $resp audio
+apk add pipewire sway rtkit xwayland firefox pipewire-pulse pipewire-alsa pipewire-jack mpv gcompat libc6-compat ttf-dejavu zsh shadow seatd elogind seatd-launch pavucontrol kitty networkmanager dmenu bemenu dbus-x11 doas wayland-protocols wayland-libs-egl glamor-egl wireplumber
+
+
+
+if ["$rc_sys" = "LXC"]; then
+exit 0
 fi
 
-DEFAULT_DISK=sda \
-	$PREFIX/sbin/setup-disk -q -m sys || exit
+DEFAULT_DISK = sda \
+ $PREFIX/sbin/setup-disk -q -m sys || exit
