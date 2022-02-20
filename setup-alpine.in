@@ -11,128 +11,25 @@ is_qemu() {
 		|| strings /sys/firmware/dmi/tables/DMI 2>/dev/null | grep -q QEMU
 }
 
-usage() {
-	cat <<-__EOF__
-		usage: setup-alpine [-ahq] [-c FILE | -f FILE]
-
-		Setup Alpine Linux
-
-		options:
-		 -a  Create Alpine Linux overlay file
-		 -c  Create answer file (do not install anything)
-		 -e  Empty root password
-		 -f  Answer file to use installation
-		 -h  Show this help
-		 -q  Quick mode. Ask fewer questions.
-	__EOF__
-	exit 1
-}
-
-while getopts "aef:c:hq" opt ; do
-	case $opt in
-		a) ARCHIVE=yes;;
-		f) USEANSWERFILE="$OPTARG";;
-		c) CREATEANSWERFILE="$OPTARG";;
-		e) empty_root_password=1;;
-		h) usage;;
-		q) empty_root_password=1; quick=1; APKREPOSOPTS="-1"; HOSTNAMEOPTS="alpine";;
-		*) usage;;
-	esac
-done
 shift $(expr $OPTIND - 1)
 
 rc_sys=$(openrc --sys)
+
 # mount xenfs so we can detect xen dom0
 if [ "$rc_sys" = "XENU" ] && ! grep -q '^xenfs' /proc/mounts; then
 	modprobe xenfs
 	mount -t xenfs xenfs /proc/xen
 fi
 
-case "$USEANSWERFILE" in
-	http*://*|ftp://*)
-		# dynamically download answer file from URL (supports HTTP(S) and FTP)
-		# ensure the network is up, otherwise setup a temporary interface config
-		if ! rc-status networking --quiet status; then
-			$PREFIX/sbin/setup-interfaces -ar
-		fi
-
-		temp="$(mktemp)"
-		wget -qO "$temp" "$USEANSWERFILE" || die "Failed to download '$USEANSWERFILE'"
-		USEANSWERFILE="$temp"
-		;;
-esac
-if [ -n "$USEANSWERFILE" ] && [ -e "$USEANSWERFILE" ]; then
-	. "$USEANSWERFILE"
-fi
-
-if [ -n "$CREATEANSWERFILE" ]; then
-	touch "$CREATEANSWERFILE" || echo "Cannot touch file $CREATEANSWERFILE"
-	cat > "$CREATEANSWERFILE" <<-__EOF__
-		# Example answer file for setup-alpine script
-		# If you don't want to use a certain option, then comment it out
-
-		# Use US layout with US variant
-		KEYMAPOPTS="us us"
-
-		# Set hostname to alpine-test
-		HOSTNAMEOPTS="-n alpine-test"
-
-		# Contents of /etc/network/interfaces
-		INTERFACESOPTS="auto lo
-		iface lo inet loopback
-
-		auto eth0
-		iface eth0 inet dhcp
-		    hostname alpine-test
-		"
-
-		# Search domain of example.com, Google public nameserver
-		DNSOPTS="-d example.com 8.8.8.8"
-
-		# Set timezone to UTC
-		TIMEZONEOPTS="-z UTC"
-
-		# set http/ftp proxy
-		PROXYOPTS="http://webproxy:8080"
-
-		# Add a random mirror
-		APKREPOSOPTS="-r"
-
-		# Install Openssh
-		SSHDOPTS="-c openssh"
-
-		# Use openntpd
-		NTPOPTS="-c openntpd"
-
-		# Use /dev/sda as a data disk
-		DISKOPTS="-m data /dev/sda"
-
-		# Setup in /media/sdb1
-		LBUOPTS="/media/sdb1"
-		APKCACHEOPTS="/media/sdb1/cache"
-
-	__EOF__
-	echo "Answer file $CREATEANSWERFILE has been created.  Please add or remove options as desired in that file"
-	exit 0
-fi
-
-if [ "$ARCHIVE" ] ; then
-	echo "Creating an Alpine overlay"
-	init_tmpdir ROOT
-else
-	PKGADD="apk add"
-fi
+PKGADD="apk add"
 
 if [ "$rc_sys" != LXC ]; then
-	$PREFIX/sbin/setup-keymap ${KEYMAPOPTS}
-	$PREFIX/sbin/setup-hostname ${HOSTNAMEOPTS}
+	$PREFIX/sbin/setup-keymap
+	$PREFIX/sbin/setup-hostname
 fi
 
-if [ -n "$INTERFACESOPTS" ]; then
-	printf "$INTERFACESOPTS" | $PREFIX/sbin/setup-interfaces -ir
-else
-	$PREFIX/sbin/setup-interfaces ${quick:+-a} -r
-fi
+
+$PREFIX/sbin/setup-interfaces -a -r
 
 # setup up dns if no dhcp was configured
 grep '^iface.*dhcp' $ROOT/etc/network/interfaces > /dev/null ||\
@@ -145,10 +42,7 @@ if [ -z "$NOCOMMIT" ] && [ -z "$empty_root_password" ]; then
 	done
 fi
 
-if [ -z "$quick" ]; then
-	# pick timezone
-	$PREFIX/sbin/setup-timezone ${TIMEZONEOPTS}
-fi
+$PREFIX/sbin/setup-timezone ${TIMEZONEOPTS}
 
 rc-update --quiet add networking boot
 rc-update --quiet add urandom boot
@@ -165,9 +59,6 @@ rc-service hostname --quiet restart
 openrc boot
 openrc default
 
-# update /etc/hosts - after we have got dhcp address
-# Get default fully qualified domain name from *first* domain
-# given on *last* search or domain statement.
 _dn=$(sed -n \
 -e '/^domain[[:space:]][[:space:]]*/{s///;s/\([^[:space:]]*\).*$/\1/;h;}' \
 -e '/^search[[:space:]][[:space:]]*/{s///;s/\([^[:space:]]*\).*$/\1/;h;}' \
@@ -176,28 +67,20 @@ _dn=$(sed -n \
 _hn=$(hostname)
 _hn=${_hn%%.*}
 
-sed -i -e "s/^127\.0\.0\.1.*/127.0.0.1\t${_hn}.${_dn:-$(get_fqdn my.domain)} ${_hn} localhost.localdomain localhost/" /etc/hosts
+wget https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn-social/hosts -O /etc/hosts
 
-if [ -z "$quick" ]; then
-	$PREFIX/sbin/setup-proxy -q ${PROXYOPTS}
-fi
 # activate the proxy if configured
 if [ -r "$ROOT/etc/profile" ]; then
 	. "$ROOT/etc/profile"
 fi
 
-if ! is_qemu && [ "$rc_sys" != "LXC" ] && [ "$quick" != 1 ]; then
-	$PREFIX/sbin/setup-ntp ${NTPOPTS}
+if ! is_qemu && [ "$rc_sys" != "LXC" ]; then
+	$PREFIX/sbin/setup-ntp -c busybox
 fi
 
-$PREFIX/sbin/setup-apkrepos ${APKREPOSOPTS}
+$PREFIX/sbin/setup-apkrepos -c -1
 
-# lets stop here if in "quick mode"
-if [ "$quick" = 1 ]; then
-	exit 0
-fi
-
-$PREFIX/sbin/setup-sshd ${SSHDOPTS}
+$PREFIX/sbin/setup-sshd
 
 if is_xen_dom0; then
 	setup-xen-dom0
@@ -207,16 +90,5 @@ if [ "$rc_sys" = "LXC" ]; then
 	exit 0
 fi
 
-DEFAULT_DISK=none \
-	$PREFIX/sbin/setup-disk -q ${DISKOPTS} || exit
-
-diskmode=$(cat /tmp/alpine-install-diskmode.out 2>/dev/null)
-
-# setup lbu and apk cache unless installed sys on disk
-if [ "$diskmode" != "sys" ]; then
-	$PREFIX/sbin/setup-lbu ${LBUOPTS}
-	$PREFIX/sbin/setup-apkcache ${APKCACHEOPTS}
-	if [ -L /etc/apk/cache ]; then
-		apk cache sync
-	fi
-fi
+DEFAULT_DISK=sda \
+	$PREFIX/sbin/setup-disk -q -m sys || exit
