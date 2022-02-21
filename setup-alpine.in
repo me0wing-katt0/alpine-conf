@@ -7,7 +7,7 @@ PREFIX =
 . $PREFIX/lib/libalpine.sh
 
 is_qemu() {
-    grep -q "QEMU" /proc/cpuinfo \ || strings /sys/firmware/dmi/tables/DMI 2>/dev/null | grep -q QEMU
+  grep -q "QEMU" /proc/cpuinfo \ || strings /sys/firmware/dmi/tables/DMI 2>/dev/null | grep -q QEMU
 }
 
 shift $(expr $OPTIND - 1)
@@ -16,15 +16,15 @@ rc_sys = $(openrc --sys)
 
 # mount xenfs so we can detect xen dom0
 if ["$rc_sys" = "XENU"] && ! grep -q '^xenfs' /proc/mounts; then
-modprobe xenfs
-mount -t xenfs xenfs /proc/xen
+  modprobe xenfs
+  mount -t xenfs xenfs /proc/xen
 fi
 
 PKGADD = "apk add"
 
 if ["$rc_sys" != LXC]; then
-$PREFIX/sbin/setup-keymap
-$PREFIX/sbin/setup-hostname
+  $PREFIX/sbin/setup-keymap
+  $PREFIX/sbin/setup-hostname
 fi
 
 
@@ -38,9 +38,9 @@ $PREFIX/sbin/setup-dns $ {
 
 # set root password
 if [-z "$NOCOMMIT"] && [-z "$empty_root_password"]; then
-while ! passwd; do
-echo "Please retry."
-done
+  while ! passwd; do
+  echo "Please retry."
+  done
 fi
 
 $PREFIX/sbin/setup-timezone
@@ -49,7 +49,7 @@ rc-update --quiet add networking boot
 rc-update --quiet add urandom boot
 for svc in acpid cron crond; do
 if rc-service --exists $svc; then
-rc-update --quiet add $svc
+  rc-update --quiet add $svc
 fi
 done
 
@@ -82,7 +82,7 @@ if ! is_qemu && ["$rc_sys" != "LXC"]; then
 fi
 
 $PREFIX/sbin/setup-apkrepos -c -1
-
+ 
 $PREFIX/sbin/setup-sshd
 
 if is_xen_dom0; then
@@ -103,8 +103,60 @@ adduser $resp video
 adduser $resp plugdev
 adduser $resp wheel
 adduser $resp audio
-apk add pipewire sway rtkit xwayland firefox pipewire-pulse pipewire-alsa pipewire-jack mpv gcompat libc6-compat ttf-dejavu zsh shadow seatd elogind seatd-launch pavucontrol kitty networkmanager dmenu bemenu dbus-x11 doas wayland-protocols wayland-libs-egl glamor-egl wireplumber
-echo "setting up cool shit done!"
+apk add pipewire  sway rtkit xwayland firefox pipewire-pulse pipewire-alsa grim wdisplays wl-clipboard slurp pipewire-jack mpv gcompat libc6-compat ttf-dejavu zsh shadow seatd elogind seatd-launch pavucontrol kitty networkmanager dmenu bemenu dbus-x11 doas wayland-protocols wayland-libs-egl glamor-egl wireplumber avizo-scripts avizo-service micro nano vim
+mkdir -p /home/$resp/.config/sway
+rc-update add networkmanager
+echo "auth       sufficient   pam_shells.so" > /etc/pam.d/chsh
+chsh $resp -s /bin/zsh
+wget https://raw.githubusercontent.com/me0wing-katt0/configs/main/sway/config -O /home/$resp/.config/sway/config
+echo 'alias swayinit="XDG_RUNTIME_DIR=~/.run dbus-launch seatd-launch sway"
+alias volup="volumectl +"
+alias voldown="volumectl -"
+# Lines configured by zsh-newuser-install
+HISTFILE=~/.histfile
+HISTSIZE=1000
+SAVEHIST=1000
+bindkey -e
+# End of lines configured by zsh-newuser-install
+# The following lines were added by compinstall
+zstyle :compinstall filename "/home/q/.zshrc"
+
+autoload -Uz compinit
+compinit
+# End of lines added by compinstall' > /home/$resp/.zshrc
+echo '<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+        "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+        "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+        <vendor>Lennart Poettering</vendor>
+
+        <action id="org.freedesktop.RealtimeKit1.acquire-high-priority">
+                <description>Grant high priority scheduling to a user process</description>
+                <description xml:lang="tr">Bir sürece yüksek öncelikli çalışabilme yetkisi ver</description>
+                <message>Authentication is required to grant an application high priority scheduling</message>
+                <message xml:lang="tr">Sürecin yüksek öncelikli çalıştırılabilmesi için yetki gerekiyor</message>
+                <defaults>
+                        <allow_any>yes</allow_any>
+                        <allow_inactive>yes</allow_inactive>
+                        <allow_active>yes</allow_active>
+                </defaults>
+        </action>
+
+        <action id="org.freedesktop.RealtimeKit1.acquire-real-time">
+                <description>Grant realtime scheduling to a user process</description>
+                <description xml:lang="tr">Bir sürece gerçek zamanlı çalışabilme yetkisi ver</description>
+                <message>Authentication is required to grant an application realtime scheduling</message>
+                <message xml:lang="tr">Sürecin gerçek zamanlı çalıştırılabilmesi için yetki gerekiyor</message>
+                <defaults>
+                        <allow_any>yes</allow_any>
+                        <allow_inactive>yes</allow_inactive>
+                        <allow_active>yes</allow_active>
+                </defaults>
+        </action>
+
+</policyconfig>' > /usr/share/polkit-1/actions/org.freedesktop.RealtimeKit1.policy 
+echo "setting up cool shit done! After the script asks you to reboot, reboot to your new system and run 'swayinit'"
 
 if ["$rc_sys" = "LXC"]; then
 exit 0
