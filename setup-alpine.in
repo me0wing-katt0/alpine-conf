@@ -43,9 +43,7 @@ echo "Please retry."
 done
 fi
 
-$PREFIX/sbin/setup-timezone $ {
-    TIMEZONEOPTS
-}
+$PREFIX/sbin/setup-timezone
 
 rc-update --quiet add networking boot
 rc-update --quiet add urandom boot
@@ -74,7 +72,7 @@ _hn = $ {
 
 wget https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn-social/hosts -O /etc/hosts
 
-# activate the proxy if configured
+
 if [-r "$ROOT/etc/profile"]; then 
   . "$ROOT/etc/profile"
 fi
@@ -92,6 +90,7 @@ if is_xen_dom0; then
 fi
 
 #the part where the real fun begins
+echo "settin' up cool shit"
 apk update
 apk upgrade
 apk add mesa-dri-nouveau mesa-dri-gallium mesa-dri-intel mesa-dri-classic mesa-dri-ati intel-ucode amd-ucode eudev
@@ -105,8 +104,7 @@ adduser $resp plugdev
 adduser $resp wheel
 adduser $resp audio
 apk add pipewire sway rtkit xwayland firefox pipewire-pulse pipewire-alsa pipewire-jack mpv gcompat libc6-compat ttf-dejavu zsh shadow seatd elogind seatd-launch pavucontrol kitty networkmanager dmenu bemenu dbus-x11 doas wayland-protocols wayland-libs-egl glamor-egl wireplumber
-
-
+echo "setting up cool shit done!"
 
 if ["$rc_sys" = "LXC"]; then
 exit 0
